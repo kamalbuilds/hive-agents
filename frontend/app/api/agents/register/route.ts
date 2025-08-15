@@ -25,9 +25,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Connect to contract
-    const provider = new ethers.JsonRpcProvider(config.rpcUrl)
+    const rpcUrl = (config as any).rpcUrl || 'http://127.0.0.1:8545'
+    const provider = new ethers.JsonRpcProvider(rpcUrl)
+    // Handle both config structures (with and without contracts wrapper)
+    const coordinatorAddress = (config as any).contracts?.HiveMindCoordinator || (config as any).HiveMindCoordinator
     const coordinator = new ethers.Contract(
-      config.HiveMindCoordinator,
+      coordinatorAddress,
       HiveMindCoordinatorABI.abi,
       provider
     )
@@ -60,7 +63,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Agent registration prepared',
       data: {
-        contractAddress: config.HiveMindCoordinator,
+        contractAddress: coordinatorAddress,
         method: 'registerAgent',
         params: [endpoint, capabilities],
         estimatedGas: '200000',
@@ -102,9 +105,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Connect to contract
-    const provider = new ethers.JsonRpcProvider(config.rpcUrl)
+    const rpcUrl = (config as any).rpcUrl || 'http://127.0.0.1:8545'
+    const provider = new ethers.JsonRpcProvider(rpcUrl)
+    // Handle both config structures (with and without contracts wrapper)
+    const coordinatorAddress = (config as any).contracts?.HiveMindCoordinator || (config as any).HiveMindCoordinator
     const coordinator = new ethers.Contract(
-      config.HiveMindCoordinator,
+      coordinatorAddress,
       HiveMindCoordinatorABI.abi,
       provider
     )

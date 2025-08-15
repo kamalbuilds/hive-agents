@@ -21,7 +21,8 @@ export function getProvider(network: string = 'localhost') {
     return new ethers.BrowserProvider((window as any).ethereum);
   }
   
-  return new ethers.JsonRpcProvider(config.rpcUrl);
+  const rpcUrl = (config as any).rpcUrl || 'http://127.0.0.1:8545';
+  return new ethers.JsonRpcProvider(rpcUrl);
 }
 
 // Get signer
@@ -37,8 +38,11 @@ export async function getCoordinatorContract(network: string = 'localhost', sign
   if (!config) throw new Error(`Unknown network: ${network}`);
   
   const provider = getProvider(network);
+  // Handle both config structures (with and without contracts wrapper)
+  const coordinatorAddress = (config as any).contracts?.HiveMindCoordinator || (config as any).HiveMindCoordinator;
+  
   const contract = new ethers.Contract(
-    config.HiveMindCoordinator,
+    coordinatorAddress,
     COORDINATOR_ABI,
     signer || provider
   );
@@ -52,8 +56,11 @@ export async function getUSDCContract(network: string = 'localhost', signer?: et
   if (!config) throw new Error(`Unknown network: ${network}`);
   
   const provider = getProvider(network);
+  // Handle both config structures (with and without contracts wrapper)
+  const usdcAddress = (config as any).contracts?.MockUSDC || (config as any).PaymentToken || (config as any).MockUSDC;
+  
   const contract = new ethers.Contract(
-    config.PaymentToken,
+    usdcAddress,
     USDC_ABI,
     signer || provider
   );

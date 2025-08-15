@@ -1,4 +1,13 @@
 {
+  "84532": {
+    "name": "Base Sepolia",
+    "rpcUrl": "https://sepolia.base.org",
+    "explorer": "https://sepolia.basescan.org",
+    "contracts": {
+      "HiveMindCoordinator": "0xC8973d8f3cd4Ee6bd5358AcDbE9a4CA517BDd129",
+      "MockUSDC": "0x6B5f6d625aa0fBA745759Ad0495017735cB72af7"
+    }
+  },
   "localhost": {
     "HiveMindCoordinator": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
     "PaymentToken": "0x5FbDB2315678afecb367f032d93F642f64180aa3",

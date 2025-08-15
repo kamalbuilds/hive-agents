@@ -5,20 +5,22 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Activity, Brain, Cpu, DollarSign, TrendingUp, Users, Zap, Shield,
   Globe, ArrowUp, ArrowDown, Wallet, Link2, Layers, CreditCard,
-  CheckCircle, AlertCircle, RefreshCw, Send, Eye, ChevronRight
+  CheckCircle, AlertCircle, RefreshCw, Send, Eye, ChevronRight, Image
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useX402 } from '@/hooks/useX402'
 import { useLayerZero } from '@/hooks/useLayerZero'
-import { useFlare } from '@/hooks/useFlare'
+import { useFlarePrices } from '@/hooks/useFlarePricesWeb3'
 import { useCoinbaseWallet } from '@/hooks/useCoinbaseWallet'
+import { useOpenSea } from '@/hooks/useOpenSea'
+import { NFTMarketplace } from '@/components/NFTMarketplace'
 import axios from 'axios'
 
 // Production API endpoints
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3003'
 
 interface SwarmMetrics {
   totalAgents: number
@@ -75,7 +77,7 @@ export default function Dashboard() {
   // Hooks for integrations
   const { getPaymentStats, discoverServices, callService } = useX402()
   const { bridgeTokens, getMessageStatus, estimateFees } = useLayerZero()
-  const { getPrices, subscribeToPrices, getRandomNumber } = useFlare()
+  const { getPrices, subscribeToPrices, getRandomNumber } = useFlarePrices()
   const { wallet, connectWallet, getBalance, sendTransaction } = useCoinbaseWallet()
 
   // State management
@@ -102,39 +104,81 @@ export default function Dashboard() {
   const [selectedChain, setSelectedChain] = useState('base')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showNFTMarketplace, setShowNFTMarketplace] = useState(false)
 
-  // Initialize WebSocket connection
+  // Initialize WebSocket connection with reconnection logic
   useEffect(() => {
-    const ws = new WebSocket(WS_URL)
+    let ws: WebSocket | null = null
+    let reconnectTimeout: NodeJS.Timeout | null = null
+    let reconnectAttempts = 0
+    const maxReconnectAttempts = 5
     
-    ws.onopen = () => {
-      console.log('WebSocket connected')
-      setIsConnected(true)
-      ws.send(JSON.stringify({ type: 'subscribe', channels: ['swarm', 'prices', 'tasks'] }))
+    const connect = () => {
+      try {
+        ws = new WebSocket(WS_URL)
+        
+        ws.onopen = () => {
+          console.log('WebSocket connected to', WS_URL)
+          setIsConnected(true)
+          setError(null)
+          reconnectAttempts = 0
+          
+          // Send subscription message
+          ws?.send(JSON.stringify({ type: 'subscribe', channels: ['swarm', 'prices', 'tasks'] }))
+        }
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+            handleWebSocketMessage(data)
+          } catch (err) {
+            console.error('Error parsing WebSocket message:', err)
+          }
+        }
+
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error)
+          setError('Connection error. Retrying...')
+        }
+
+        ws.onclose = (event) => {
+          console.log('WebSocket disconnected:', event.code, event.reason)
+          setIsConnected(false)
+          setWsConnection(null)
+          
+          // Attempt to reconnect if not intentionally closed
+          if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000) // Exponential backoff
+            setError(`Connection lost. Reconnecting in ${delay / 1000}s... (Attempt ${reconnectAttempts}/${maxReconnectAttempts})`)
+            
+            reconnectTimeout = setTimeout(() => {
+              console.log('Attempting to reconnect...')
+              connect()
+            }, delay)
+          } else if (reconnectAttempts >= maxReconnectAttempts) {
+            setError('Failed to connect to WebSocket server. Please refresh the page.')
+          }
+        }
+
+        setWsConnection(ws)
+      } catch (error) {
+        console.error('Failed to create WebSocket connection:', error)
+        setError('Failed to connect to WebSocket server')
+      }
     }
+    
+    // Initial connection
+    connect()
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      handleWebSocketMessage(data)
-    }
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
-      setError('Connection error. Retrying...')
-    }
-
-    ws.onclose = () => {
-      setIsConnected(false)
-      setTimeout(() => {
-        // Reconnect after 3 seconds
-        window.location.reload()
-      }, 3000)
-    }
-
-    setWsConnection(ws)
-
+    // Cleanup on unmount
     return () => {
-      ws.close()
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close(1000, 'Component unmounting')
+      }
     }
   }, [])
 
@@ -157,7 +201,12 @@ export default function Dashboard() {
         }))
         break
       case 'crosschain_tx':
-        setCrossChainTxs(prev => [data.transaction, ...prev.slice(0, 9)])
+        // Ensure unique ID for transaction
+        const txWithUniqueId = {
+          ...data.transaction,
+          id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+        }
+        setCrossChainTxs(prev => [txWithUniqueId, ...prev.slice(0, 9)])
         break
     }
   }
@@ -177,13 +226,14 @@ export default function Dashboard() {
       setAgents(swarmRes.data.agents)
 
       // Fetch price feeds from Flare
-      const prices = await getPrices(['FLR/USD', 'XRP/USD', 'BTC/USD', 'ETH/USD'])
-      setPriceFeeds(prices.map((p: any) => ({
+      const pricesObj = await getPrices(['FLR/USD', 'XRP/USD', 'BTC/USD', 'ETH/USD'])
+      const pricesArray = Object.values(pricesObj)
+      setPriceFeeds(pricesArray.map((p: any) => ({
         pair: p.symbol,
-        price: p.value,
+        price: p.price,
         change: p.change24h || 0,
         volume24h: p.volume || 0,
-        source: 'flare',
+        source: p.source || 'flare',
         lastUpdate: new Date(p.timestamp),
         confidence: p.confidence || 99
       })))
@@ -207,10 +257,10 @@ export default function Dashboard() {
       (prices) => {
         setPriceFeeds(prices.map((p: any) => ({
           pair: p.symbol,
-          price: p.value,
+          price: p.price,
           change: p.change24h || 0,
           volume24h: p.volume || 0,
-          source: 'flare',
+          source: p.source || 'flare',
           lastUpdate: new Date(p.timestamp),
           confidence: p.confidence || 99
         })))
@@ -259,7 +309,7 @@ export default function Dashboard() {
       })
 
       setCrossChainTxs(prev => [{
-        id: tx.messageId,
+        id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
         sourceChain: selectedChain,
         destChain,
         amount,
@@ -327,6 +377,16 @@ export default function Dashboard() {
             </div>
             
             <div className="flex items-center gap-4">
+              {/* NFT Marketplace Toggle */}
+              <Button
+                onClick={() => setShowNFTMarketplace(!showNFTMarketplace)}
+                className={showNFTMarketplace ? "bg-purple-500 hover:bg-purple-600" : "bg-gray-700 hover:bg-gray-600"}
+                size="sm"
+              >
+                <Image className="w-4 h-4 mr-2" />
+                NFT Marketplace
+              </Button>
+
               {/* Network Status */}
               <div className="flex items-center gap-2">
                 <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
@@ -639,6 +699,7 @@ export default function Dashboard() {
                   <Button
                     variant="outline"
                     className="border-blue-600 text-blue-400 hover:text-blue-300"
+                    onClick={() => window.open('https://bazaar.x402.org', '_blank')}
                   >
                     <Globe className="w-4 h-4 mr-2" />
                     View on x402 Bazaar
@@ -825,6 +886,24 @@ export default function Dashboard() {
             </Card>
           </motion.div>
         </div>
+
+        {/* NFT Marketplace Section */}
+        {showNFTMarketplace && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="mt-8"
+          >
+            <NFTMarketplace 
+              walletAddress={wallet?.address}
+              onPurchase={(nft) => {
+                console.log('NFT purchase requested:', nft)
+                // Handle NFT purchase through smart contract
+              }}
+            />
+          </motion.div>
+        )}
       </div>
     </div>
   )

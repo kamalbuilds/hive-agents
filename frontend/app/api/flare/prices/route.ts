@@ -6,19 +6,46 @@ const COSTON2_RPC = 'https://coston2-api.flare.network/ext/C/rpc'
 const FTSO_REGISTRY = '0xaD67FE66660Fb8dFE9d6b1b4240d8650e30F6019' // Coston2 FtsoRegistry
 const PRICE_SUBMITTER = '0x1000000000000000000000000000000000000003' // PriceSubmitter contract
 
-// FTSO Price Feed contract addresses on Coston2
-const PRICE_FEEDS: Record<string, string> = {
-  'FLR/USD': '0x0142E7fCaB3AB2b5E3E3D7a55b4f7f7b8E0fF9e4b',
-  'XRP/USD': '0x38F8e3b67FA8329FE4BaA1775e5480C99B56E5eB',
-  'BTC/USD': '0x3BfC20e5A9aFb3e0E5F5d3E3e8Dbb5d3DCb7F341',
-  'ETH/USD': '0x264c10B127CdAb4e13E5D89b6c6f5bFFC0e5fC66',
+// FTSO V2 Price Feed configuration for Coston2
+const FTSO_V2_RELAY = '0x6fBe299b5aAd63d879E9fb8Fb2E0b8A3d5Ce7f10' // Coston2 FtsoV2Interface
+const FAST_UPDATER = '0x58fb598EC6DB6901aA6F26a9A2087E9274128E59' // FastUpdater contract
+const FAST_UPDATES_CONFIG = '0x0EC0283576E1BEAf78fe649cC4a59b68A0Ba0a01' // FastUpdatesConfiguration
+
+// Supported price feed indices on Coston2
+const FEED_INDICES: Record<string, number> = {
+  'FLR/USD': 0,
+  'SGB/USD': 1,
+  'BTC/USD': 2,
+  'XRP/USD': 3,
+  'LTC/USD': 4,
+  'XLM/USD': 5,
+  'DOGE/USD': 6,
+  'ADA/USD': 7,
+  'ALGO/USD': 8,
+  'ETH/USD': 9,
+  'FIL/USD': 10,
+  'ARB/USD': 11,
+  'AVAX/USD': 12,
+  'BNB/USD': 13,
+  'MATIC/USD': 14,
+  'SOL/USD': 15,
+  'USDC/USD': 16,
+  'USDT/USD': 17,
+  'XDC/USD': 18
 }
 
-// ABI for FtsoRegistry getCurrentPrice function
-const FTSO_ABI = [
-  'function getCurrentPrice() external view returns (uint256 price, uint256 timestamp)',
-  'function getCurrentPriceWithDecimals() external view returns (uint256 price, uint256 timestamp, uint256 decimals)',
-  'function getEpochPrice(uint256 epochId) external view returns (uint256)',
+// ABI for FTSO V2 Interface
+const FTSO_V2_ABI = [
+  'function getFeedById(bytes21 _feedId) external view returns (uint256 value, int8 decimals, uint64 timestamp)',
+  'function getFeedByIndex(uint256 _index) external view returns (uint256 value, int8 decimals, uint64 timestamp)',
+  'function getFeedId(uint256 _index) external view returns (bytes21)',
+  'function getSupportedFeedIds() external view returns (bytes21[] memory)',
+  'function getSupportedIndicesAndSymbols() external view returns (uint256[] memory indices, string[] memory symbols, bytes21[] memory feedIds)'
+]
+
+// ABI for Fast Updates
+const FAST_UPDATER_ABI = [
+  'function fetchCurrentFeeds(uint256[] calldata _indices) external view returns (uint256[] memory _values, int8[] memory _decimals, uint64 _timestamp)'
 ]
 
 interface PriceData {
@@ -47,78 +74,119 @@ export async function POST(request: NextRequest) {
     const provider = new ethers.JsonRpcProvider(COSTON2_RPC)
     const blockNumber = await provider.getBlockNumber()
     
+    // Initialize FTSO V2 contract
+    const ftsoV2 = new ethers.Contract(FTSO_V2_RELAY, FTSO_V2_ABI, provider)
+    const fastUpdater = new ethers.Contract(FAST_UPDATER, FAST_UPDATER_ABI, provider)
+    
     const prices: PriceData[] = []
     
+    // Get indices for requested symbols
+    const requestedIndices: number[] = []
+    const symbolToIndex: Map<string, number> = new Map()
+    
     for (const symbol of symbols) {
+      if (FEED_INDICES[symbol] !== undefined) {
+        requestedIndices.push(FEED_INDICES[symbol])
+        symbolToIndex.set(symbol, FEED_INDICES[symbol])
+      }
+    }
+    
+    if (requestedIndices.length > 0) {
       try {
-        // For now, fetch simulated prices (in production, use actual FTSO contracts)
-        // Real implementation would query the FTSO price feed contracts
+        // Fetch current prices using Fast Updates for better performance
+        const [values, decimals, timestamp] = await fastUpdater.fetchCurrentFeeds(requestedIndices)
         
-        // Get current block timestamp
-        const block = await provider.getBlock('latest')
-        const timestamp = block?.timestamp || Math.floor(Date.now() / 1000)
-        
-        // Simulate price data (replace with actual FTSO calls)
-        const priceMap: Record<string, number> = {
-          'FLR/USD': 0.0234 + (Math.random() - 0.5) * 0.002,
-          'XRP/USD': 0.5678 + (Math.random() - 0.5) * 0.05,
-          'BTC/USD': 45678.90 + (Math.random() - 0.5) * 500,
-          'ETH/USD': 2345.67 + (Math.random() - 0.5) * 50,
+        // Process fetched prices
+        for (let i = 0; i < requestedIndices.length; i++) {
+          const symbol = symbols.find(s => symbolToIndex.get(s) === requestedIndices[i])
+          if (symbol) {
+            const value = Number(values[i]) / Math.pow(10, Math.abs(Number(decimals[i])))
+            
+            prices.push({
+              symbol,
+              value,
+              timestamp: Number(timestamp) * 1000, // Convert to milliseconds
+              decimals: Math.abs(Number(decimals[i])),
+              confidence: 100, // FTSO prices have 100% confidence when available
+              source: 'flare-ftso-v2',
+              blockNumber
+            })
+          }
         }
-        
-        const price = priceMap[symbol] || 0
-        
-        prices.push({
-          symbol,
-          value: price,
-          timestamp: timestamp * 1000, // Convert to milliseconds
-          decimals: symbol.includes('BTC') || symbol.includes('ETH') ? 2 : 4,
-          confidence: 99.5 + Math.random() * 0.5, // 99.5-100% confidence
-          source: 'flare-coston2',
-          blockNumber
-        })
-        
-        // TODO: Implement actual FTSO price fetching
-        // const ftsoAddress = PRICE_FEEDS[symbol]
-        // if (ftsoAddress) {
-        //   const ftso = new ethers.Contract(ftsoAddress, FTSO_ABI, provider)
-        //   const [price, timestamp, decimals] = await ftso.getCurrentPriceWithDecimals()
-        //   prices.push({
-        //     symbol,
-        //     value: Number(price) / Math.pow(10, Number(decimals)),
-        //     timestamp: Number(timestamp) * 1000,
-        //     decimals: Number(decimals),
-        //     confidence: 100,
-        //     source: 'flare-coston2',
-        //     blockNumber
-        //   })
-        // }
       } catch (err) {
-        console.error(`Failed to fetch price for ${symbol}:`, err)
+        console.error('Failed to fetch prices from Fast Updater, falling back to individual queries:', err)
+        
+        // Fallback to individual price queries
+        for (const symbol of symbols) {
+          try {
+            const index = FEED_INDICES[symbol]
+            if (index !== undefined) {
+              const [value, decimals, timestamp] = await ftsoV2.getFeedByIndex(index)
+              
+              prices.push({
+                symbol,
+                value: Number(value) / Math.pow(10, Math.abs(Number(decimals))),
+                timestamp: Number(timestamp) * 1000,
+                decimals: Math.abs(Number(decimals)),
+                confidence: 100,
+                source: 'flare-ftso-v2',
+                blockNumber
+              })
+            } else {
+              // Symbol not supported by FTSO
+              prices.push({
+                symbol,
+                value: 0,
+                timestamp: Date.now(),
+                decimals: 18,
+                confidence: 0,
+                source: 'flare-ftso-v2',
+                blockNumber
+              })
+            }
+          } catch (err) {
+            console.error(`Failed to fetch price for ${symbol}:`, err)
+            prices.push({
+              symbol,
+              value: 0,
+              timestamp: Date.now(),
+              decimals: 18,
+              confidence: 0,
+              source: 'flare-ftso-v2',
+              blockNumber
+            })
+          }
+        }
+      }
+    } else {
+      // No valid symbols requested
+      for (const symbol of symbols) {
         prices.push({
           symbol,
           value: 0,
           timestamp: Date.now(),
           decimals: 18,
           confidence: 0,
-          source: 'flare-coston2',
+          source: 'flare-ftso-v2',
           blockNumber
         })
       }
     }
     
-    // Calculate 24h change (simulated)
+    // Calculate 24h change (would require historical data in production)
     const pricesWithChange = prices.map(p => ({
       ...p,
-      change24h: (Math.random() - 0.5) * 10,
-      volume: Math.floor(Math.random() * 10000000)
+      change24h: p.confidence > 0 ? ((Math.random() - 0.5) * 10) : 0, // Placeholder for actual 24h change
+      volume: p.confidence > 0 ? Math.floor(100000 + Math.random() * 9900000) : 0 // Placeholder volume
     }))
 
     return NextResponse.json({ 
       prices: pricesWithChange,
       network: 'coston2',
       blockNumber,
-      ftsoRegistry: FTSO_REGISTRY
+      ftsoV2Interface: FTSO_V2_RELAY,
+      fastUpdater: FAST_UPDATER,
+      timestamp: Date.now()
     })
   } catch (error) {
     console.error('Error fetching Flare prices:', error)
@@ -143,40 +211,76 @@ export async function GET(request: NextRequest) {
     const block = await provider.getBlock('latest')
     
     if (!symbol) {
-      // Return info about available price feeds
-      return NextResponse.json({
-        network: 'flare-coston2',
-        rpcUrl: COSTON2_RPC,
-        ftsoRegistry: FTSO_REGISTRY,
-        blockNumber,
-        timestamp: block?.timestamp,
-        availableFeeds: Object.keys(PRICE_FEEDS),
-        priceFeeds: PRICE_FEEDS,
-        documentation: 'https://docs.flare.network/tech/ftso/'
-      })
+      // Get supported feeds from contract
+      try {
+        const ftsoV2 = new ethers.Contract(FTSO_V2_RELAY, FTSO_V2_ABI, provider)
+        const [indices, symbols, feedIds] = await ftsoV2.getSupportedIndicesAndSymbols()
+        
+        return NextResponse.json({
+          network: 'flare-coston2',
+          rpcUrl: COSTON2_RPC,
+          ftsoV2Interface: FTSO_V2_RELAY,
+          fastUpdater: FAST_UPDATER,
+          blockNumber,
+          timestamp: block?.timestamp,
+          availableFeeds: symbols,
+          feedIndices: Object.fromEntries(symbols.map((s: string, i: number) => [s, indices[i].toString()])),
+          feedIds: Object.fromEntries(symbols.map((s: string, i: number) => [s, feedIds[i]])),
+          documentation: 'https://docs.flare.network/tech/ftso/'
+        })
+      } catch (err) {
+        // Fallback to predefined feeds if contract call fails
+        return NextResponse.json({
+          network: 'flare-coston2',
+          rpcUrl: COSTON2_RPC,
+          ftsoV2Interface: FTSO_V2_RELAY,
+          fastUpdater: FAST_UPDATER,
+          blockNumber,
+          timestamp: block?.timestamp,
+          availableFeeds: Object.keys(FEED_INDICES),
+          feedIndices: FEED_INDICES,
+          documentation: 'https://docs.flare.network/tech/ftso/'
+        })
+      }
     }
 
     // Fetch specific symbol price
-    const priceMap: Record<string, number> = {
-      'FLR/USD': 0.0234,
-      'XRP/USD': 0.5678,
-      'BTC/USD': 45678.90,
-      'ETH/USD': 2345.67,
+    try {
+      const index = FEED_INDICES[symbol]
+      if (index !== undefined) {
+        const ftsoV2 = new ethers.Contract(FTSO_V2_RELAY, FTSO_V2_ABI, provider)
+        const [value, decimals, timestamp] = await ftsoV2.getFeedByIndex(index)
+        
+        return NextResponse.json({
+          symbol,
+          value: Number(value) / Math.pow(10, Math.abs(Number(decimals))),
+          timestamp: Number(timestamp) * 1000,
+          decimals: Math.abs(Number(decimals)),
+          confidence: 100,
+          source: 'flare-ftso-v2',
+          blockNumber,
+          network: 'coston2',
+          feedIndex: index
+        })
+      } else {
+        return NextResponse.json(
+          { 
+            error: 'Symbol not supported by FTSO',
+            availableSymbols: Object.keys(FEED_INDICES)
+          },
+          { status: 404 }
+        )
+      }
+    } catch (error) {
+      console.error('Error fetching price:', error)
+      return NextResponse.json(
+        { 
+          error: 'Failed to fetch price from FTSO',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        },
+        { status: 500 }
+      )
     }
-
-    const basePrice = priceMap[symbol] || 0
-    const price = basePrice + (Math.random() - 0.5) * (basePrice * 0.01)
-
-    return NextResponse.json({
-      symbol,
-      value: price,
-      timestamp: Date.now(),
-      confidence: 99.9,
-      source: 'flare-coston2',
-      blockNumber,
-      network: 'coston2',
-      ftsoContract: PRICE_FEEDS[symbol] || null
-    })
   } catch (error) {
     console.error('Error connecting to Flare:', error)
     return NextResponse.json(
