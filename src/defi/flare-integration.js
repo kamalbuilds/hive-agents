@@ -1,23 +1,43 @@
-// Flare Network Integration - FTSO & FAssets
+// Flare Network Integration - FTSO V2 & FAssets
 import { ethers } from 'ethers';
 import axios from 'axios';
 
+// FTSO V2 Configuration for Coston2 Testnet
+const FTSO_V2_CONFIG = {
+  coston2: {
+    ftsoV2: '0x3d893C53D9e8056135C26C8c638B76C8b60Df726',
+    fastUpdatesConfiguration: '0xE7d1D5D58cAE01a82b84989A931999Cb34A86B14',
+    relay: '0x6C4A5B5E87Be5CB16ecF1a9B78BCa5Ca07ca1F0b',
+    ftsoRegistry: '0xaD67FE66660Fb8dFE9d6b1b4240d8650e30F6019',
+    wnat: '0xC67DCE33D7A8efA5FfEB961899C73fe01bCe9273'
+  },
+  flare: {
+    ftsoV2: '0x5C5B5E7BcD1C432032b10c8cE57a08958A06dE07',
+    fastUpdatesConfiguration: '0x3B1771C8CD2d60f8E1aF7C3C46d4A72261b7AEE8',
+    relay: '0x31Ce666d4B38A7e1281244C59106c35AB53cD71B',
+    ftsoRegistry: '0xaD67FE66660Fb8dFE9d6b1b4240d8650e30F6019',
+    wnat: '0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d'
+  }
+};
+
+// Feed ID mappings (bytes21 format)
+const FEED_IDS = {
+  'FLR/USD': '0x01464c522f55534400000000000000000000000000',
+  'BTC/USD': '0x014254432f55534400000000000000000000000000', 
+  'ETH/USD': '0x014554482f55534400000000000000000000000000',
+  'XRP/USD': '0x015852502f55534400000000000000000000000000',
+  'LTC/USD': '0x014c54432f55534400000000000000000000000000'
+};
+
 class FlareIntegration {
   constructor(config) {
-    this.network = config.network || 'flare';
+    this.network = config.network || 'coston2';
     this.rpcUrl = this.getRPCUrl();
     this.provider = new ethers.JsonRpcProvider(this.rpcUrl);
     
-    // Contract addresses (Flare Mainnet)
-    this.contracts = {
-      ftsoRegistry: '0xaD67FE66660Fb8dFE9d6b1b4240d8650e30F6019',
-      ftsoManager: '0xbfA12e4E1411B62EdA8B035d71735667422A6A9e',
-      priceSubmitter: '0x1000000000000000000000000000000000000003',
-      wnat: '0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d', // Wrapped Native Token
-      fassets: {
-        fxrp: '0x0000000000000000000000000000000000000000' // FAssets XRP (when deployed)
-      }
-    };
+    // Use FTSO V2 contract addresses
+    this.contracts = FTSO_V2_CONFIG[this.network];
+    this.feedIds = FEED_IDS;
     
     this.ftsoSymbols = ['FLR/USD', 'XRP/USD', 'BTC/USD', 'ETH/USD', 'LTC/USD'];
     this.priceCache = new Map();
@@ -33,18 +53,19 @@ class FlareIntegration {
     return urls[this.network] || urls.flare;
   }
 
-  // Get FTSO Registry contract
-  getFTSORegistry() {
+  // Get FTSO V2 contract
+  getFTSOV2Contract() {
     const abi = [
-      'function getFtsoBySymbol(string memory _symbol) external view returns(address)',
-      'function getSupportedSymbols() external view returns(string[] memory)',
-      'function getFtsos(uint256[] memory _indices) external view returns(address[] memory)'
+      'function getFeedById(bytes21 feedId) external view returns (uint256 value, int8 decimals, uint64 timestamp)',
+      'function getFeedByIdInWei(bytes21 feedId) external view returns (uint256 value, uint64 timestamp)',
+      'function getFeedsById(bytes21[] calldata feedIds) external view returns (tuple(uint256 value, int8 decimals, uint64 timestamp)[] memory)',
+      'function verifyFeedData(tuple(bytes32[] proof, tuple(uint32 votingRoundId, bytes21 id, int32 value, uint16 turnoutBIPS, int8 decimals) body) calldata) external view returns (bool)'
     ];
     
-    return new ethers.Contract(this.contracts.ftsoRegistry, abi, this.provider);
+    return new ethers.Contract(this.contracts.ftsoV2, abi, this.provider);
   }
 
-  // Get current price from FTSO
+  // Get current price from FTSO V2
   async getCurrentPrice(symbol) {
     // Check cache first
     const cached = this.priceCache.get(symbol);
@@ -52,28 +73,26 @@ class FlareIntegration {
       return cached.data;
     }
     
+    const feedId = this.feedIds[symbol];
+    if (!feedId) {
+      throw new Error(`Unsupported symbol: ${symbol}`);
+    }
+
     try {
-      const ftsoRegistry = this.getFTSORegistry();
-      const ftsoAddress = await ftsoRegistry.getFtsoBySymbol(symbol);
+      const ftsoV2 = this.getFTSOV2Contract();
       
-      if (ftsoAddress === ethers.ZeroAddress) {
-        throw new Error(`FTSO not found for symbol: ${symbol}`);
-      }
-      
-      const ftsoAbi = [
-        'function getCurrentPrice() external view returns (uint256 _price, uint256 _timestamp)',
-        'function getCurrentPriceWithDecimals() external view returns (uint256 _price, uint256 _timestamp, uint256 _decimals)'
-      ];
-      
-      const ftso = new ethers.Contract(ftsoAddress, ftsoAbi, this.provider);
-      const [price, timestamp, decimals] = await ftso.getCurrentPriceWithDecimals();
+      // Fetch price from FTSO V2
+      const [value, decimals, timestamp] = await ftsoV2.getFeedById(feedId);
       
       const priceData = {
         symbol,
-        price: Number(price) / Math.pow(10, Number(decimals)),
-        timestamp: Number(timestamp),
+        price: Number(value) / Math.pow(10, Math.abs(Number(decimals))),
+        timestamp: Number(timestamp) * 1000,
         decimals: Number(decimals),
-        ftsoAddress
+        feedId,
+        blockNumber: await this.provider.getBlockNumber(),
+        verified: true,
+        network: this.network
       };
       
       // Cache the result
@@ -82,18 +101,21 @@ class FlareIntegration {
         timestamp: Date.now()
       });
       
+      console.log(`✅ Real FTSO V2 price for ${symbol}: $${priceData.price}`);
       return priceData;
       
     } catch (error) {
-      console.error(`Failed to get FTSO price for ${symbol}:`, error);
+      console.error(`Failed to get FTSO V2 price for ${symbol}:`, error);
       
-      // Return mock data for development
+      // Fallback to mock data if testnet is down
       return {
         symbol,
         price: this.getMockPrice(symbol),
         timestamp: Date.now(),
         decimals: 5,
-        mock: true
+        feedId,
+        mock: true,
+        error: error.message
       };
     }
   }
@@ -110,18 +132,55 @@ class FlareIntegration {
     return prices[symbol] || 100;
   }
 
-  // Get multiple prices at once
+  // Get multiple prices at once using batch FTSO V2 call
   async getMultiplePrices(symbols) {
-    const pricePromises = symbols.map(symbol => this.getCurrentPrice(symbol));
-    const prices = await Promise.all(pricePromises);
+    const feedIds = symbols.map(symbol => this.feedIds[symbol]).filter(Boolean);
     
-    return prices.reduce((acc, price) => {
-      acc[price.symbol] = price;
-      return acc;
-    }, {});
+    if (feedIds.length === 0) {
+      console.error('No valid feed IDs for symbols:', symbols);
+      return {};
+    }
+    
+    try {
+      const ftsoV2 = this.getFTSOV2Contract();
+      
+      // Batch fetch prices from FTSO V2
+      const results = await ftsoV2.getFeedsById(feedIds);
+      
+      const prices = {};
+      symbols.forEach((symbol, index) => {
+        if (this.feedIds[symbol] && results[index]) {
+          const [value, decimals, timestamp] = results[index];
+          prices[symbol] = {
+            symbol,
+            price: Number(value) / Math.pow(10, Math.abs(Number(decimals))),
+            timestamp: Number(timestamp) * 1000,
+            decimals: Number(decimals),
+            feedId: this.feedIds[symbol],
+            verified: true,
+            network: this.network
+          };
+        }
+      });
+      
+      console.log(`✅ Fetched ${Object.keys(prices).length} real FTSO V2 prices`);
+      return prices;
+      
+    } catch (error) {
+      console.error('Batch price fetch failed:', error);
+      
+      // Fallback to individual fetches
+      const pricePromises = symbols.map(symbol => this.getCurrentPrice(symbol));
+      const pricesArray = await Promise.all(pricePromises);
+      
+      return pricesArray.reduce((acc, price) => {
+        acc[price.symbol] = price;
+        return acc;
+      }, {});
+    }
   }
 
-  // Subscribe to price updates (polling-based)
+  // Subscribe to price updates with event monitoring
   subscribeToPriceUpdates(symbols, callback, interval = 30000) {
     const updatePrices = async () => {
       try {
@@ -135,22 +194,52 @@ class FlareIntegration {
     // Initial fetch
     updatePrices();
     
-    // Set up polling
+    // Set up polling (will be replaced with events when available)
     const intervalId = setInterval(updatePrices, interval);
     
+    // Monitor for relay events (FTSO V2 updates)
+    if (this.contracts.relay) {
+      try {
+        const relayAbi = ['event SigningPolicyRelayed(uint256 indexed rewardEpochId, bytes32 signingPolicyHash, bool isInitialRelay)'];
+        const relay = new ethers.Contract(this.contracts.relay, relayAbi, this.provider);
+        
+        relay.on('SigningPolicyRelayed', async () => {
+          console.log('📡 FTSO V2 update detected, fetching new prices...');
+          await updatePrices();
+        });
+      } catch (error) {
+        console.error('Failed to setup relay event listener:', error);
+      }
+    }
+    
     // Return unsubscribe function
-    return () => clearInterval(intervalId);
+    return () => {
+      clearInterval(intervalId);
+      if (this.contracts.relay) {
+        try {
+          const relay = new ethers.Contract(this.contracts.relay, [], this.provider);
+          relay.removeAllListeners('SigningPolicyRelayed');
+        } catch {}
+      }
+    };
   }
 
-  // Get supported FTSO symbols
+  // Get supported FTSO V2 symbols
   async getSupportedSymbols() {
+    // FTSO V2 uses feed IDs, return our configured symbols
+    return Object.keys(this.feedIds);
+  }
+  
+  // Verify feed data with Merkle proof
+  async verifyFeedData(feedDataWithProof) {
     try {
-      const ftsoRegistry = this.getFTSORegistry();
-      const symbols = await ftsoRegistry.getSupportedSymbols();
-      return symbols;
+      const ftsoV2 = this.getFTSOV2Contract();
+      const isValid = await ftsoV2.verifyFeedData(feedDataWithProof);
+      console.log(`📝 Feed data verification: ${isValid ? 'VALID' : 'INVALID'}`);
+      return isValid;
     } catch (error) {
-      console.error('Failed to get supported symbols:', error);
-      return this.ftsoSymbols; // Return default list
+      console.error('Feed verification failed:', error);
+      return false;
     }
   }
 

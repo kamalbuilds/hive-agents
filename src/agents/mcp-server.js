@@ -1,6 +1,7 @@
 // MCP Server for Agent Capabilities
 import express from 'express';
-import { MCPayProxy } from 'mcpay';
+import mcpay from 'mcpay';
+const { MCPayProxy } = mcpay;
 import X402PaymentGateway from './x402-gateway.js';
 
 class AgentMCPServer {

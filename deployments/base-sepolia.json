@@ -1,0 +1,11 @@
+{
+  "network": "base-sepolia",
+  "chainId": 84532,
+  "contracts": {
+    "MockUSDC": "0x6B5f6d625aa0fBA745759Ad0495017735cB72af7",
+    "HiveMindCoordinator": "0xC8973d8f3cd4Ee6bd5358AcDbE9a4CA517BDd129"
+  },
+  "deployer": "0x575E1D9DB08388356ceb2e91C8e30B4E24664a62",
+  "timestamp": "2025-08-14T12:54:29.217Z",
+  "blockNumber": 29703890
+}
