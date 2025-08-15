@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
@@ -353,7 +353,7 @@ contract HiveMindCoordinator is Ownable, ReentrancyGuard {
      */
     function _calculateReputation(Agent memory agent) 
         private 
-        pure 
+        view 
         returns (uint256) 
     {
         if (agent.tasksCompleted == 0) {
@@ -378,11 +378,11 @@ contract HiveMindCoordinator is Ownable, ReentrancyGuard {
         string memory capability, 
         address agent
     ) private {
-        address[] storage agents = capabilityToAgents[capability];
-        for (uint i = 0; i < agents.length; i++) {
-            if (agents[i] == agent) {
-                agents[i] = agents[agents.length - 1];
-                agents.pop();
+        address[] storage agentList = capabilityToAgents[capability];
+        for (uint i = 0; i < agentList.length; i++) {
+            if (agentList[i] == agent) {
+                agentList[i] = agentList[agentList.length - 1];
+                agentList.pop();
                 break;
             }
         }
