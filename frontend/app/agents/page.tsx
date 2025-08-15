@@ -29,7 +29,7 @@ export default function AgentsPage() {
 
   useEffect(() => {
     loadAgents()
-  }, [])
+  }, []);
 
   const loadAgents = async () => {
     // Mock data - replace with actual API call

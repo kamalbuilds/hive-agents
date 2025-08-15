@@ -20,9 +20,9 @@ interface Service {
 }
 
 export function ServiceDiscovery() {
-  const [services, setServices] = useState<Service[]>([])
-  const [searchTerm, setSearchTerm] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [services, setServices] = useState<Service[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     discoverServices()
