@@ -1,0 +1,42 @@
+{
+  "name": "hive-mind",
+  "version": "1.0.0",
+  "description": "Autonomous AI Agent Swarm Marketplace",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "swarm:init": "node scripts/init-swarm.js",
+    "agent:spawn": "node scripts/spawn-agent.js",
+    "deploy": "hardhat deploy",
+    "test": "hardhat test",
+    "lint": "eslint src/**/*.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@coinbase/cdp-sdk": "^0.5.0",
+    "@coinbase/x402": "^0.1.0",
+    "@layerzerolabs/oapp-evm": "^0.0.4",
+    "axios": "^1.7.9",
+    "ethers": "^6.13.4",
+    "express": "^4.21.2",
+    "mcpay": "^0.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "viem": "^2.21.67",
+    "x402-axios": "^0.1.0",
+    "x402-express": "^0.1.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.18.0",
+    "hardhat": "^2.22.19",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.6"
+  }
+}
