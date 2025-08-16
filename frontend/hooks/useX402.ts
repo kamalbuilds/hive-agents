@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react'
 import axios, { AxiosError } from 'axios'
+// @ts-ignore
 import { useFacilitator } from 'x402/verify'
+// @ts-ignore
 import { facilitator } from '@coinbase/x402'
 
 interface X402Config {
