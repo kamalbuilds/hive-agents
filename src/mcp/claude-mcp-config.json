@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "hive-mind-agentkit": {
+      "command": "npx",
+      "args": [
+        "tsx",
+        "/Users/kamal/Desktop/nyc/hive-mind/src/mcp/mcp-agentkit.ts"
+      ],
+      "env": {
+        "CDP_API_KEY_NAME": "33bfdef5-2f47-4bc2-a380-23c23fc01c30",
+        "CDP_API_KEY_SECRET": "P6SWY6tRaFeg4in11kP3QNms8nG3eOm6gg8jCnS8FLRQfHexRxlTf6o7OAXKUopkJBDnUlTY/kql0kiCg3vneA==",
+        "CDP_WALLET_SECRET": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg7uYVweVb5QXCym+G/cWet9DrWcTGffdc/Q3W4c2Um6mhRANCAAR4E5cFgKMPYJzL1gTlu9nMbcLKPzclyqN9zpxoQhP9+ECCNzdPKuNtFbo0YRuEw5dC5w1BgBxgZHYnDnxtmvxw",
+        "NETWORK_ID": "base-mainnet",
+        "WALLET_PRIVATE_KEY": "35413b1d15d2c1286dc5a5a2d66ba80233e858482637519887504c8d8f1af1de",
+        "OPENSEA_API_KEY": "4892c499da954161b75f0932a2171788",
+        "OPENSEA_ACCESS_TOKEN": "aw0Zy876VFBWAyb7l6ayPwoWr2EU7tnGQOovsz4egU"
+      }
+    },
+    "opensea": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.opensea.io/aw0Zy876VFBWAyb7l6ayPwoWr2EU7tnGQOovsz4egU/mcp"
+      ]
+    }
+  }
+}

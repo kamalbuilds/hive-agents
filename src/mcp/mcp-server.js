@@ -3,12 +3,24 @@
  * Handles Model Context Protocol communication
  */
 
-const { Server } = require('@modelcontextprotocol/sdk/server/index.js')
-const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js')
 const logger = require('./logger')
 
 class MCPServer {
   constructor() {
+    this.server = null
+    this.StdioServerTransport = null
+    this.tools = new Map()
+    this.initialized = false
+  }
+
+  async initialize() {
+    if (this.initialized) return
+    
+    // Dynamic import for ES modules
+    const { Server } = await import('@modelcontextprotocol/sdk/server/index.js')
+    const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js')
+    
+    this.StdioServerTransport = StdioServerTransport
     this.server = new Server({
       name: 'hive-mind-mcp',
       version: '1.0.0',
@@ -17,7 +29,8 @@ class MCPServer {
       }
     })
     
-    this.tools = new Map()
+    this.initialized = true
+    logger.info('MCP Server initialized')
   }
 
   registerTool(name, schema, handler) {
@@ -26,6 +39,8 @@ class MCPServer {
   }
 
   async start() {
+    await this.initialize()
+    
     // Register all tools with the server
     for (const [name, { schema, handler }] of this.tools) {
       this.server.setRequestHandler(`tools/${name}`, async (request) => {
@@ -50,15 +65,17 @@ class MCPServer {
     })
 
     // Start the server with stdio transport
-    const transport = new StdioServerTransport()
+    const transport = new this.StdioServerTransport()
     await this.server.connect(transport)
     
     logger.info('MCP Server started successfully')
   }
 
   async stop() {
-    await this.server.close()
-    logger.info('MCP Server stopped')
+    if (this.server) {
+      await this.server.close()
+      logger.info('MCP Server stopped')
+    }
   }
 }
 

@@ -43,6 +43,7 @@ function App() {
       const balance = await provider.getBalance(newWallet.address)
       setBalance(ethers.formatEther(balance))
       
+      
       setStatus('Wallet ready')
     } catch (error) {
       console.error('Wallet initialization error:', error)

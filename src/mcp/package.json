@@ -2,25 +2,33 @@
   "name": "hive-mind-mcp-wallet",
   "version": "1.0.0",
   "description": "Embedded MCP wallet with OpenSea integration for HiveMind",
+  "type": "module",
   "main": "electron.js",
   "scripts": {
     "start": "electron .",
     "dev": "NODE_ENV=development electron .",
     "build": "cd renderer && npm run build",
-    "mcp": "npm run build && node mcp-server.js",
+    "mcp": "node mcp-standalone.js",
+    "mcp:agentkit": "tsx mcp-agentkit.ts",
+    "mcp:agentkit:js": "node mcp-agentkit.js",
     "test": "jest"
   },
   "dependencies": {
+    "@coinbase/agentkit": "^0.10.0",
+    "@coinbase/agentkit-model-context-protocol": "^0.2.0",
     "@modelcontextprotocol/sdk": "^0.5.0",
     "axios": "^1.7.9",
+    "dotenv": "^16.0.3",
     "electron": "^28.1.0",
     "ethers": "^6.13.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.11",
     "@types/react": "^18.0.0",
-    "jest": "^29.0.0"
+    "jest": "^29.0.0",
+    "tsx": "^4.20.4",
+    "typescript": "^5.9.2"
   }
 }

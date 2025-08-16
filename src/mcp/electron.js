@@ -5,12 +5,11 @@
 
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
-const { MCPServer } = require('./mcp-server')
 const { OpenSeaMCPBridge } = require('./opensea-bridge')
 const logger = require('./logger')
+require('dotenv').config()
 
 let mainWindow = null
-let mcpServer = null
 let openSeaBridge = null
 
 // Operation definitions for MCP tools
@@ -180,116 +179,8 @@ function createWindow() {
   })
 }
 
-// Initialize MCP Server
-async function initializeMCPServer() {
-  mcpServer = new MCPServer()
-  
-  // Register wallet tools
-  mcpServer.registerTool('sign_message', {
-    title: operations.signMessage.title,
-    description: operations.signMessage.description
-  }, async (params) => {
-    const signature = await operations.signMessage.tool(params.message)
-    return {
-      content: [{ type: 'text', text: signature }]
-    }
-  })
-
-  mcpServer.registerTool('sign_transaction', {
-    title: operations.signTransaction.title,
-    description: operations.signTransaction.description
-  }, async (params) => {
-    const signedTx = await operations.signTransaction.tool(params.transaction)
-    return {
-      content: [{ type: 'text', text: signedTx }]
-    }
-  })
-
-  // Register OpenSea MCP tools
-  mcpServer.registerTool('search_nft_collections', {
-    title: operations.searchNFTCollections.title,
-    description: operations.searchNFTCollections.description
-  }, async (params) => {
-    const collections = await operations.searchNFTCollections.tool(params.query, params.chain)
-    return {
-      content: [{ type: 'text', text: JSON.stringify(collections) }]
-    }
-  })
-
-  mcpServer.registerTool('get_nft_floor_price', {
-    title: operations.getNFTFloorPrice.title,
-    description: operations.getNFTFloorPrice.description
-  }, async (params) => {
-    const price = await operations.getNFTFloorPrice.tool(params.collectionSlug)
-    return {
-      content: [{ type: 'text', text: JSON.stringify(price) }]
-    }
-  })
-
-  mcpServer.registerTool('get_wallet_nfts', {
-    title: operations.getWalletNFTs.title,
-    description: operations.getWalletNFTs.description
-  }, async (params) => {
-    const nfts = await operations.getWalletNFTs.tool(params.address, params.chain)
-    return {
-      content: [{ type: 'text', text: JSON.stringify(nfts) }]
-    }
-  })
-
-  mcpServer.registerTool('get_token_swap_quote', {
-    title: operations.getTokenSwapQuote.title,
-    description: operations.getTokenSwapQuote.description
-  }, async (params) => {
-    const quote = await operations.getTokenSwapQuote.tool(
-      params.fromToken,
-      params.toToken,
-      params.amount,
-      params.chain
-    )
-    return {
-      content: [{ type: 'text', text: JSON.stringify(quote) }]
-    }
-  })
-
-  mcpServer.registerTool('get_trending_collections', {
-    title: operations.getTrendingCollections.title,
-    description: operations.getTrendingCollections.description
-  }, async (params) => {
-    const trending = await operations.getTrendingCollections.tool(params.timeframe, params.chain)
-    return {
-      content: [{ type: 'text', text: JSON.stringify(trending) }]
-    }
-  })
-
-  // Register x402 tools
-  mcpServer.registerTool('discover_services', {
-    title: operations.discoverServices.title,
-    description: operations.discoverServices.description
-  }, async () => {
-    const services = await operations.discoverServices.tool()
-    return {
-      content: [{ type: 'text', text: JSON.stringify(services) }]
-    }
-  })
-
-  mcpServer.registerTool('create_payment_channel', {
-    title: operations.createPaymentChannel.title,
-    description: operations.createPaymentChannel.description
-  }, async (params) => {
-    const channel = await operations.createPaymentChannel.tool(
-      params.serviceId,
-      params.amount,
-      params.duration
-    )
-    return {
-      content: [{ type: 'text', text: JSON.stringify(channel) }]
-    }
-  })
-
-  // Start the MCP server
-  await mcpServer.start()
-  logger.info('MCP Server started successfully')
-}
+// Note: MCP Server is now run separately as mcp-standalone.js
+// This Electron app focuses on the embedded wallet UI
 
 // Initialize OpenSea Bridge
 function initializeOpenSeaBridge() {
@@ -315,10 +206,9 @@ ipcMain.handle('opensea-direct-call', async (event, tool, params) => {
 })
 
 // App event handlers
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   createWindow()
   initializeOpenSeaBridge()
-  await initializeMCPServer()
 })
 
 app.on('window-all-closed', () => {
