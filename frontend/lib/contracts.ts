@@ -1,11 +1,7 @@
 import { ethers } from 'ethers';
 import contractsConfig from '../config/contracts.json';
-import HiveMindCoordinatorABI from '../../contracts/artifacts/contracts/HiveMindCoordinator.sol/HiveMindCoordinator.json';
-import MockUSDABI from '../../contracts/artifacts/contracts/MockUSDC.sol/MockUSDC.json';
-
-// Contract ABIs
-const COORDINATOR_ABI = HiveMindCoordinatorABI.abi;
-const USDC_ABI = MockUSDABI.abi;
+import COORDINATOR_ABI from './abis/HiveMindCoordinator.json';
+import USDC_ABI from './abis/MockUSDC.json';
 
 // Get network config
 export function getNetworkConfig(network: string = 'localhost') {
