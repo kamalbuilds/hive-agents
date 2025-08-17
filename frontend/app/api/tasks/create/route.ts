@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ethers } from 'ethers'
 import contractsConfig from '../../../../config/contracts.json'
-import HiveMindCoordinatorABI from '../../../../../contracts/artifacts/contracts/HiveMindCoordinator.sol/HiveMindCoordinator.json'
+import HiveMindCoordinatorABI from '../../../../lib/abis/HiveMindCoordinator.json'
 
 export async function POST(request: NextRequest) {
   try {
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
     const coordinatorAddress = (config as any).contracts?.HiveMindCoordinator || (config as any).HiveMindCoordinator
     const coordinator = new ethers.Contract(
       coordinatorAddress,
-      HiveMindCoordinatorABI.abi,
+      HiveMindCoordinatorABI,
       provider
     )
 
