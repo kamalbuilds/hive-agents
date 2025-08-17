@@ -30,6 +30,22 @@ interface ILayerZeroEndpointV2 {
     ) external payable returns (bytes32);
 }
 
+interface IUniswapV4SwapRouter {
+    function swapExactInputSingle(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 amountOutMinimum,
+        address recipient
+    ) external returns (uint256 amountOut);
+    
+    function getQuote(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    ) external view returns (uint256 amountOut);
+}
+
 contract TokenSwapComposer is IOAppComposer, Ownable {
     using SafeERC20 for IERC20;
     
@@ -40,6 +56,9 @@ contract TokenSwapComposer is IOAppComposer, Ownable {
     mapping(address => address) public swapRouters; // token => DEX router
     mapping(address => bool) public supportedTokens;
     mapping(bytes32 => address) public oAppRegistry;
+    
+    // Uniswap V4 router
+    IUniswapV4SwapRouter public uniswapV4Router;
     
     // Events
     event SwapExecuted(
@@ -145,9 +164,33 @@ contract TokenSwapComposer is IOAppComposer, Ownable {
         uint256 amountIn,
         uint256 minAmountOut
     ) private returns (uint256 amountOut) {
-        // Simplified swap logic - in production would call actual DEX
-        // For demo, return minAmountOut
+        // Use Uniswap V4 router if configured
+        if (address(uniswapV4Router) != address(0) && router == address(uniswapV4Router)) {
+            // Approve Uniswap V4 router
+            IERC20(tokenIn).safeIncreaseAllowance(address(uniswapV4Router), amountIn);
+            
+            // Execute swap through Uniswap V4
+            amountOut = uniswapV4Router.swapExactInputSingle(
+                tokenIn,
+                tokenOut,
+                amountIn,
+                minAmountOut,
+                address(this)
+            );
+            
+            return amountOut;
+        }
+        
+        // Fallback to simplified swap for testing
         return minAmountOut;
+    }
+    
+    /**
+     * @notice Set Uniswap V4 router
+     */
+    function setUniswapV4Router(address _router) external onlyOwner {
+        require(_router != address(0), "Invalid router");
+        uniswapV4Router = IUniswapV4SwapRouter(_router);
     }
     
     /**
@@ -177,8 +220,16 @@ contract TokenSwapComposer is IOAppComposer, Ownable {
             return amountIn;
         }
         
-        // In production, would query DEX for actual quote
-        // For demo, return 1:1 ratio with 1% slippage
+        // Use Uniswap V4 router for quotes if available
+        if (address(uniswapV4Router) != address(0)) {
+            try uniswapV4Router.getQuote(pyusd, targetToken, amountIn) returns (uint256 quote) {
+                return quote;
+            } catch {
+                // Fallback to default quote
+            }
+        }
+        
+        // Default: return 1:1 ratio with 1% slippage
         return amountIn * 99 / 100;
     }
     
