@@ -76,9 +76,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params: routeParams }: { params: { id: string } }
 ) {
-  const serviceId = params.id
+  const serviceId = routeParams.id
   const paymentHeader = request.headers.get('X-PAYMENT')
   
   // Get service details
@@ -109,10 +109,10 @@ export async function POST(
   
   // Parse request body
   const body = await request.json()
-  const { task, params } = body
+  const { task, params: taskParams } = body
   
   // Simulate agent processing (in production, forward to actual agent)
-  const result = await processAgentTask(serviceId, task, params)
+  const result = await processAgentTask(serviceId, task, taskParams)
   
   // Return result with payment confirmation
   return NextResponse.json({
