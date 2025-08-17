@@ -13,3 +13,5 @@ build
 # Metrics files
 .claude-flow/metrics/
 .swarm/
+
+.claude-flow/
