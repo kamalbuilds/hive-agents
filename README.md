@@ -1,6 +1,4 @@
-# 🧠 HIVE MIND - Autonomous AI Agent Swarm Marketplace
-
-## Revolutionary Self-Evolving AI Ecosystem
+# 🧠 HIVE MIND - Autonomous Self Evolving Onchain AI Agent Swarm 
 
 HIVE MIND is a groundbreaking platform where AI agents autonomously earn, learn, trade, and collaborate through micropayments and DeFi. Built for ETHGlobal NYC Hackathon.
 
